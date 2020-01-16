@@ -1,0 +1,33 @@
+from background_task import background, tasks
+import time
+import threading
+import json
+
+
+time = int(time.time())
+threading.Thread(target=lambda: every(3, updateSmartBoxesTime(time))).start()
+print("thread para comparar epoch datetimes funcionando...")
+
+@background(schedule=60)
+def updateSmartBoxesTime():
+    serverTime = int(time.time())
+    latestBoxDataQuery= db['sena']['data'].find({}, limit=1).sort('_id', -1)
+    for each in latestBoxDataQuery:
+        boxTime = int(each['date'])
+        client_mqtt = ConnectionMQTT(topic="config/99999")
+        client_mqtt.publish(json.dumps(serverTime))
+        print("publique el servertime: ", serverTime)
+
+updateSmartBoxesTime(tasks.EVERY_4_WEEKS)
+
+def every(delay, task):
+    next_time = time.time() + delay
+    while True:
+        time.sleep(max(0, next_time - time.time()))
+        try:
+            task()
+        except Exception:
+            # in production code you might want to have this instead of course:
+            logger.exception("Problem while executing repetitive task.")
+        # skip tasks if we are behind schedule:
+        next_time += (time.time() - next_time) // delay * delay + delay
